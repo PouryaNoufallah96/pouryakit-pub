@@ -1,0 +1,19 @@
+{
+  "name": "pouryakit",
+  "description": "PouryaKit's AI skill: how to build a .NET modular monolith on the Kit's packages.",
+  "owner": {
+    "name": "Pourya Nofallah"
+  },
+  "plugins": [
+    {
+      "name": "pourya-kit",
+      "source": "./",
+      "description": "How to build a .NET modular monolith on PouryaKit.",
+      "version": "0.1.0",
+      "strict": false,
+      "skills": [
+        "./skills/pourya-kit"
+      ]
+    }
+  ]
+}
