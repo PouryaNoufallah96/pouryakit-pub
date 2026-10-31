@@ -14,7 +14,7 @@
 ## Install and generate
 
 ```bash
-# From nuget.org, at the Kit's version, such as 0.1.0-preview.0.28. From another NuGet source, add --add-source <folder or feed>.
+# From nuget.org, at the Kit's version, such as 0.1.0-preview.1. From another NuGet source, add --add-source <folder or feed>.
 dotnet new install PouryaKit.Templates@<version>
 
 dotnet new pouryakit-monolith -n Acme.Shop
@@ -27,7 +27,7 @@ dotnet new pouryakit-service -n Acme.Stock
 - Each template generates a solution in a folder named after `-n`: `Acme.Shop.slnx`, `src/Acme.Shop.Host`, `src/Acme.Shop.ServiceDefaults`, `src/Acme.Shop.ReverseProxy` but in the service, the Modules under `src/Modules/` with their sample names, and `tests/Acme.Shop.Tests`. Without `-n` it takes the output folder's name.
 - `dotnet new` restores the solution once it is generated; `--no-restore` skips that. The restore needs a NuGet source with the Kit's packages.
 - `Directory.Packages.props` pins every Kit package at `$(PouryaKitVersion)`, the version the template package was packed with, and every third-party package at the version the Kit builds and tests with. Upgrade the Kit by changing `PouryaKitVersion`.
-- `global.json` pins the Kit's SDK, which a later patch of the same feature band also satisfies (`rollForward` is `latestPatch`), and Microsoft.Testing.Platform; `.config/dotnet-tools.json` holds `dotnet-ef`.
+- `global.json` pins the Kit's SDK, which a later patch of the same feature band also satisfies (`rollForward` is `latestPatch`), and Microsoft.Testing.Platform; `.config/dotnet-tools.json` holds `dotnet-ef` and `csharpier`.
 
 ## What each composition composes
 
