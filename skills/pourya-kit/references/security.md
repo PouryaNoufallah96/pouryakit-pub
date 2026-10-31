@@ -12,7 +12,7 @@
 - [Password hashing](#password-hashing)
 - [JWT bearer authentication](#jwt-bearer-authentication)
 
-The Kit has no role system, policy framework, identity store or admin bypass, and issues no token: no token endpoint, provider SDK, API key or PKCE flow. A rule that is not "this Actor holds this permission", such as one that reads the command's data, is an `IAuthorizer<T>` of the Module's own ([commands-queries-validation.md](commands-queries-validation.md#authorization-hook)).
+The Kit has no role system, policy framework or admin bypass, and no token endpoint, provider SDK, API key or PKCE flow. A rule that is not "this Actor holds this permission", such as one that reads the command's data, is an `IAuthorizer<T>` of the Module's own ([commands-queries-validation.md](commands-queries-validation.md#authorization-hook)).
 
 ## Declaring a permission
 
@@ -93,7 +93,7 @@ public sealed class CallerPermissions(IHttpContextAccessor http, IOptions<Pourya
 
 ## Continuations
 
-- A trusted continuation is an Operation whose `OperationContext.IsTrustedContinuation` is true (ADR 0007). That is a Notification Handler's or Integration Event Handler's delivery, whose context the Kit restored from the headers its Outbox wrote when the causing Operation committed. It is also an Operation that a running, authorized Operation continued with `context.Continue()`, such as a synchronous question through another Module's Contracts, and the request of a trusted peer Host that continues an Operation, whose context Web restores from the peer's context headers ([web.md](web.md#calls-between-kit-hosts)). The permission check lets it run without asking `IActorPermissions` again, so durable work never depends on what its Actor may do by the time it runs.
+- A trusted continuation is an Operation whose `OperationContext.IsTrustedContinuation` is true. That is a Notification Handler's or Integration Event Handler's delivery, whose context the Kit restored from the headers its Outbox wrote when the causing Operation committed. It is also an Operation that a running, authorized Operation continued with `context.Continue()`, such as a synchronous question through another Module's Contracts, and the request of a trusted peer Host that continues an Operation, whose context Web restores from the peer's context headers ([web.md](web.md#calls-between-kit-hosts)). The permission check lets it run without asking `IActorPermissions` again, so durable work never depends on what its Actor may do by the time it runs.
 - Only the Kit sets the mark. A context your code creates is never trusted, whatever `causationId` you give it. `Continue()` is trusted only when it is called on the context of the Operation it runs in, after that Operation was authorized. Outside it, on a context that never ran or whose Operation has ended, and inside an authorizer or a validator, `Continue()` only records the causation. `CausationId` only records the chain.
 - A handler in an authorized Operation can therefore continue into protected work that its Actor holds no permission for. Declare a permission on the Operation that decides to cause such work, and review what its handler continues into.
 - Only the permission check stands aside. Every other `IAuthorizer<T>` registered for the continued command or query still runs, with the original Actor, and can refuse it; recognise a trusted continuation there by `context.IsTrustedContinuation`, never by `CausationId`. So does the tenant requirement of a tenant-scoped Module: a continuation without a tenant is refused there ([multi-tenancy.md](multi-tenancy.md#declaring-a-tenant-scoped-module)).
@@ -169,21 +169,18 @@ internal sealed class Account
 
 ### Why these parameters
 
-Chosen on 2026-10-07 from one check of two sources:
-
-- OWASP Password Storage Cheat Sheet, `OWASP/CheatSheetSeries@3c07d4a cheatsheets/Password_Storage_Cheat_Sheet.md` (2026-10-04), PBKDF2 section: PBKDF2-HMAC-SHA256 at 600,000 iterations is the recommended PBKDF2 setting, HMAC-SHA-512 needs 220,000, and SHA-1 is legacy only. It names Argon2id first, but the platform has no Argon2id and the Kit takes no third-party cryptography; PBKDF2 is the sheet's choice when FIPS-140 validated implementations matter. It also recommends upgrading the work factor by re-hashing at the next sign-in, and storing the algorithm and work factor with the hash.
-- .NET 10 API reference, `Rfc2898DeriveBytes.Pbkdf2` (learn.microsoft.com, page updated 2026-07-01): the one-shot static methods support SHA-1, SHA-256, SHA-384 and SHA-512 and convert a `string` or `char` password to UTF-8, throwing `EncoderFallbackException` when it has no UTF-8 form.
+OWASP's Password Storage Cheat Sheet recommends PBKDF2-HMAC-SHA256 at 600,000 iterations; HMAC-SHA-512 needs 220,000, and SHA-1 is legacy only. It names Argon2id first, but the platform has no Argon2id and the Kit takes no third-party cryptography; PBKDF2 is the sheet's choice when FIPS-140 validated implementations matter. It also recommends upgrading the work factor by re-hashing at the next sign-in, and storing the algorithm and work factor with the hash. `Rfc2898DeriveBytes.Pbkdf2` supports SHA-1, SHA-256, SHA-384 and SHA-512 and converts a `string` or `char` password to UTF-8, throwing `EncoderFallbackException` when it has no UTF-8 form.
 
 Raise `Iterations` when the guidance does; existing hashes keep verifying and are re-hashed as their owners sign in.
 
 ### Testing password hashing
 
 - Test through `IPasswordHasher` from `AddPouryaKitPasswordHashing`: the Kit's own tests resolve it from a provider built over the service collection, and start a Host to see options outside their bounds refused.
-- The minimum iterations apply in tests too; at the defaults the Kit's 60 password test cases run in about 4 s.
+- The minimum iterations apply in tests too.
 
 ## JWT bearer authentication
 
-For a Host whose callers present bearer tokens from an identity provider. The Kit verifies and normalizes them; it issues none. JWT token creation is an excluded recommendation: it was recommended and the owner has not accepted it, and the Kit's catalogue of Capabilities refuses token issuance, so a Host that must issue tokens does it with its identity provider, outside the Kit.
+For a Host whose callers present bearer tokens from an identity provider. The Kit verifies and normalizes them; it issues none. A Host that must issue tokens does it with its identity provider, outside the Kit.
 
 ```csharp
 using PouryaKit.Security.JwtBearer;

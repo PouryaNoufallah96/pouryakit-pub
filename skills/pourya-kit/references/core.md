@@ -121,4 +121,4 @@ The context belongs to the thread, so the scope is a `ref struct`: the compiler 
 
 ## What Core never holds
 
-Core's public types are exactly `PredicateBuilder`, `ImplementingTypes` and `SynchronizationContextScope`. `CoreTests` in `tests/PouryaKit.ArchitectureTests` fails when a fourth public type appears, so a new helper is an owner decision, never an addition. A helper that belongs to one Capability lives in that Capability's package, and a helper that belongs to the application lives in the application.
+Core's public types are exactly `PredicateBuilder`, `ImplementingTypes` and `SynchronizationContextScope`. A helper that belongs to one Capability lives in that Capability's package, and a helper that belongs to the application lives in the application.

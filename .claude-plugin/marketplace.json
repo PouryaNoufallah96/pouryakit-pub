@@ -9,7 +9,7 @@
       "name": "pourya-kit",
       "source": "./",
       "description": "How to build a .NET modular monolith on PouryaKit.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "strict": false,
       "skills": [
         "./skills/pourya-kit"

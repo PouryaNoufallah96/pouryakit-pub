@@ -1,6 +1,6 @@
 # Realtime
 
-`PouryaKit.Realtime`: server-sent events to browser clients. A Notification Handler pushes a realtime event on a Channel through `IRealtimePublisher`; the push is a PostgreSQL notification written on the delivery's own transaction, which PostgreSQL hands to the listener of every instance of the Host when that transaction commits; each instance passes it to its clients of the delivery's tenant that listen on the Channel, through an SSE endpoint a Module maps with `MapPouryaKitRealtime`. It references `PouryaKit.Web`, `PouryaKit.Persistence.EFCore` and Npgsql. Namespace `PouryaKit.Realtime`. The mechanism is ADR 0012.
+`PouryaKit.Realtime`: server-sent events to browser clients. A Notification Handler pushes a realtime event on a Channel through `IRealtimePublisher`; the push is a PostgreSQL notification written on the delivery's own transaction, which PostgreSQL hands to the listener of every instance of the Host when that transaction commits; each instance passes it to its clients of the delivery's tenant that listen on the Channel, through an SSE endpoint a Module maps with `MapPouryaKitRealtime`. It references `PouryaKit.Web`, `PouryaKit.Persistence.EFCore` and Npgsql. Namespace `PouryaKit.Realtime`.
 
 - [Registering](#registering)
 - [Pushing from a Notification Handler](#pushing-from-a-notification-handler)
@@ -80,7 +80,7 @@ internal sealed class NewProductsRealtime : IEndpoint
 - **A client receives only its tenant's events on the Channels its endpoint admits for its Actor.**
 - **An oversized push fails in the handler**, never silently in transit.
 - **After a lost listener connection, every client gets a `gap`.** The listener reconnects at once and, while that fails, after 1 second, then twice as long each time up to 30 seconds, listens again, and only then sends the gap, so a client that reads its state again on `gap` misses nothing committed after it.
-- **The framework's features leave a connection whole**, as `RealtimeTests` verify: the rate limit per Actor counts one permit for a connection, whatever it streams; response compression leaves `text/event-stream` alone, even when the Host adds it to the compressed types, since the response states `Content-Encoding: identity`; and status code pages leave a started connection as it was written.
+- **The framework's features leave a connection whole**: the rate limit per Actor counts one permit for a connection, whatever it streams; response compression leaves `text/event-stream` alone, even when the Host adds it to the compressed types, since the response states `Content-Encoding: identity`; and status code pages leave a started connection as it was written.
 
 ## Limits
 
@@ -92,6 +92,6 @@ internal sealed class NewProductsRealtime : IEndpoint
 
 ## Testing
 
-- The Proving Sample's `RealtimeTests` read the endpoint over the test server with `SseParser`, reading from `HttpCompletionOption.ResponseHeadersRead`, and wait for the `connected` event before they push. Two instances are Hosts composed with `AppFixture.ComposeHost` on the fixture's database, each configured back to `DurabilityMode.Balanced` after `UsePouryaKitTestDelivery`'s Solo, and started with `HostFixture.StartHostAsync`. A test that pushes twice and depends on their order waits for the first push's deliveries (`WaitForDeliveriesAsync`): deliveries run in parallel.
+- The Proving Sample's tests read the endpoint over the test server with `SseParser`, reading from `HttpCompletionOption.ResponseHeadersRead`, and wait for the `connected` event before they push. Two instances are Hosts composed with `AppFixture.ComposeHost` on the fixture's database, each configured back to `DurabilityMode.Balanced` after `UsePouryaKitTestDelivery`'s Solo, and started with `HostFixture.StartHostAsync`. A test that pushes twice and depends on their order waits for the first push's deliveries (`WaitForDeliveriesAsync`): deliveries run in parallel.
 - A lost listener connection is the server's `pg_terminate_backend` on the session whose `application_name` is `pouryakit-realtime`.
 - A test Host that composes a Module with a Notification Handler that pushes registers `AddPouryaKitRealtime` too: the Kit's container is validated when it is built.

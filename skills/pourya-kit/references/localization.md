@@ -54,7 +54,7 @@ internal sealed class GreetQueryHandler(IStringLocalizer<GreetingMessages> messa
 
 ## What the Kit guarantees
 
-- A request whose `Accept-Language` header gives Persian, `fa` or a regional variant such as `fa-IR`, the highest quality among the cultures the Host supports in the first 16 values of the header's list, ties in listed order, runs in Persian (`en;q=0.1, fa;q=1` does), and its Feature's localizer reads the Persian message; a request with no header, `en` or a culture the Host does not support runs in English, and so does one whose only Persian value has quality 0 (`fa;q=0`), which the header's rule (RFC 9110) reads as not acceptable, and so does one that names Persian only after 16 other values: the provider tries 16, not the framework's default of three, and the bound keeps a long header from costing a lookup per value. The header is the only source: no query string or cookie changes the culture.
+- A request whose `Accept-Language` header prefers Persian, `fa` or a regional variant such as `fa-IR`, over the other cultures the Host supports, by quality and then by listed order, runs in Persian (`en;q=0.1, fa;q=1` does), and its Feature's localizer reads the Persian message. A request with no header, `en` or a culture the Host does not support runs in English, and so does one whose only Persian value has quality 0 (`fa;q=0`) or comes after 16 other values: the provider reads the first 16 values, not the framework's default of three. The header is the only source: no query string or cookie changes the culture.
 - The culture flows through the Gateway into the Operation's handlers, which run in the request's culture.
 - A cached query ([caching.md](caching.md)) is stored per UI culture, so each culture's callers read their own answer.
 - The Kit's own Error messages stay English in every culture.
@@ -67,7 +67,7 @@ internal sealed class GreetQueryHandler(IStringLocalizer<GreetingMessages> messa
 
 ## Testing
 
-Send the request with the header and assert the message, as the Proving Sample's `LocalizationTests` does against its Stub Module:
+Send the request with the header and assert the message, as the Proving Sample's tests do against its Stub Module:
 
 ```csharp
 using var client = app.Client("caller");

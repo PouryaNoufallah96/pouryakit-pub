@@ -2,6 +2,7 @@
 
 `PouryaKit.Modularity`: the Composition Root, the Gateway and one scope per Operation, in one Host container. Namespace `PouryaKit.Modularity`. The Operation Context it requires lives in `PouryaKit.Cqrs`.
 
+- [Adding a Module](#adding-a-module)
 - [The Composition Root](#the-composition-root)
 - [The Gateway](#the-gateway)
 - [The Operation Context](#the-operation-context)
@@ -10,6 +11,19 @@
 - [Asking another Module a question](#asking-another-module-a-question)
 - [An application of one Module](#an-application-of-one-module)
 - [Testing](#testing)
+
+## Adding a Module
+
+Start from the modular monolith template, or grow the monolith into it ([templates.md](templates.md#growing-the-monolith-into-a-modular-monolith)). A new Module sits beside the generated ones.
+
+1. Give the Module a folder under `src/Modules/` with its project, and a Contracts project when other Modules use what it publishes, as Catalog has `Catalog.Contracts`. Its project references `PouryaKit.Modularity` and the Kit packages its Features use.
+2. Write its Composition Root: one public sealed class that implements `IModuleDefinition` ([below](#the-composition-root)).
+3. In `AppHost.cs`, add it beside the others with `modules.Add<…>()` in `AddPouryaKitModules`, and give it its own section in `appsettings.json` when it has settings.
+4. Give it a migration, then migrate it naming its project and its DbContext ([persistence.md](persistence.md#migrations)).
+
+A tenant-scoped Module also follows [multi-tenancy.md](multi-tenancy.md).
+
+## The Composition Root
 
 A Module's Composition Root and the Host that composes it, after the Proving Sample:
 
@@ -47,16 +61,14 @@ public static WebApplicationBuilder CreateBuilder(string[] args)
 }
 ```
 
-## The Composition Root
-
 - Implement `IModuleDefinition` once per Module, as a public sealed class with a parameterless constructor. Everything else in the Module stays `internal`, except the ports its Host implements for it with the records they carry ([messaging.md](messaging.md#writing-a-notification-handler)) and the migrations `dotnet-ef` writes; a structure test rejects any other public type ([testing.md](testing.md#structure-tests)).
 - `Configure(ModuleBuilder module)` declares everything the Module needs and offers: its data (`UsePouryaKitPostgres`, `MapPouryaKitUniqueConstraint`, `AddPouryaKitDapper`), its Features (`AddPouryaKitCqrs`, `AddPouryaKitValidation`), its Notification Handlers (`AddPouryaKitNotificationHandlers`), the Integration Events and Snapshots it publishes and the Integration Event Handlers it subscribes (`Publish`, `PublishSnapshot`, `Subscribe`), its endpoints (`AddPouryaKitEndpoints`) and its own services. `ModuleBuilder` is an `IServiceCollection` over the Host's one container, so every registration extension works on it.
 - A Composition Root never names its own Module or its own assembly. `ModuleBuilder` is the Module seam, `IModuleServices` (`PouryaKit.Cqrs`), which gives every Kit registration made on it the Module's definition type, and the Kit finds it at run time, so a helper of yours typed as `IServiceCollection` keeps it:
-  - **Its Features live in its definition's assembly** (ADR 0001). `AddPouryaKitCqrs()`, `AddPouryaKitValidation()`, `AddPouryaKitPermissions()`, `AddPouryaKitDapper(connectionName)`, `AddPouryaKitNotificationHandlers()`, `AddPouryaKitEndpoints(prefix)` and `AddPouryaKitLocalization()` with no assembly scan or record the assembly of the class that implements `IModuleDefinition`. Features that live elsewhere are named instead, `module.AddPouryaKitCqrs(typeof(CatalogModule).Assembly, typeof(SharedFeatures).Assembly)`: named assemblies replace the inferred one, in their order.
+  - **Its Features live in its definition's assembly.** `AddPouryaKitCqrs()`, `AddPouryaKitValidation()`, `AddPouryaKitPermissions()`, `AddPouryaKitDapper(connectionName)`, `AddPouryaKitNotificationHandlers()`, `AddPouryaKitEndpoints(prefix)` and `AddPouryaKitLocalization()` with no assembly scan or record the assembly of the class that implements `IModuleDefinition`. Features that live elsewhere are named instead, `module.AddPouryaKitCqrs(typeof(CatalogModule).Assembly, typeof(SharedFeatures).Assembly)`: named assemblies replace the inferred one, in their order.
   - **Its declarations belong to it.** `Publish`, `Subscribe`, `PublishSnapshot`, `AddPouryaKitNotificationHandlers`, `AddPouryaKitDelayedCommand` and `AddPouryaKitRecurringCommand` on its builder run in the Module: its Unit of Work, its Receipts. Each has a second form that names the Module, `builder.Services.Subscribe<ProductCreatedV1, AuditHandler>("inventory.audit", typeof(InventoryModule))`, for the Host's composition when it declares on a Module's behalf; named on another Module's builder it throws while the Host is composed, and naming a Module the Host never adds fails the Host's build.
 - The Unit of Work registered on a Module's builder becomes that Module's own; every other registration goes into the Host's container as it is. The persistence and messaging packages key the Module's Receipts and idempotency store by the Module too, so an Operation keeps its Receipts and keys in its own Module's store, whatever write model another Module has and in whichever order the Host calls `AddPouryaKitModules` and `UsePouryaKitWolverine`.
 - The Host adds each Module once: `builder.AddPouryaKitModules(modules => modules.Add<CatalogModule>().Add<InventoryModule>().Add<BillingModule>())`. That runs each Composition Root and registers the Module's Gateway.
-- **A Module's own settings** live under its name in the configuration of each Host that composes it, `Catalog:Section:Key`, and an environment variable overrides one as `Catalog__Section__Key`. `Configure(ModuleBuilder)` receives no configuration: bind the section to an options type of the Module's, validate it at start and inject it, `module.AddOptions<T>().BindConfiguration("Catalog:Section").Validate(options => ..., message).ValidateOnStart()`, then `IOptions<T>` where a Feature needs it, so a Host given an invalid value fails to start with an `OptionsValidationException` carrying that message, instead of at first use. The proven example is Inventory's recurring command: its Composition Root binds `Inventory:ReconcileStock` onto the options builder `AddPouryaKitRecurringCommand` returns, which already carries the Kit's validation and `ValidateOnStart()`, so the Module only binds, and `RecurringCommandTests.A_host_whose_recurring_command_has_no_cadence_fails_to_start` shows a Host given a zero cadence failing to start with an `OptionsValidationException` that names the option ([messaging.md](messaging.md#recurring-commands)).
+- **A Module's own settings** live under its name in the configuration of each Host that composes it, `Catalog:Section:Key`, and an environment variable overrides one as `Catalog__Section__Key`. `Configure(ModuleBuilder)` receives no configuration: bind the section to an options type of the Module's, validate it at start and inject it, `module.AddOptions<T>().BindConfiguration("Catalog:Section").Validate(options => ..., message).ValidateOnStart()`, then `IOptions<T>` where a Feature needs it, so a Host given an invalid value fails to start with an `OptionsValidationException` carrying that message, instead of at first use. Inventory's recurring command is the example: its Composition Root binds `Inventory:ReconcileStock` onto the options builder `AddPouryaKitRecurringCommand` returns, which already carries the Kit's validation and `ValidateOnStart()`, so the Module only binds ([messaging.md](messaging.md#recurring-commands)).
 
 ## The Gateway
 
@@ -225,6 +237,6 @@ var written = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send
 ## Testing
 
 - Test a Module through its Gateway against the hosted application, `Fixture.Gateway<TModule>()`, which runs each call as one Operation in its own scope, as the Host does ([testing.md](testing.md#each-test)). Pass an `OperationContext` of your own where the Actor, tenant or correlation matters ([testing.md](testing.md#the-operation-context-in-tests)).
-- Test a question to another Module through the asking Module's command: assert what the command did with an answer and with "not found", and that the answering Operation continued the asking one's context. `OperationContextTests.A_module_answers_another_modules_question_through_its_contracts_and_its_gateway` and `OperationContextTests.A_question_to_another_module_continues_the_asking_operations_context` in the Kit's repository are the pattern.
-- Test a mistake in a Host's composition with a Host of the test's own that makes it: assert the exception and its message at the moment its check runs, while the Host is composed, at `Build()` or at `StartAsync`. Compose it in Production, where only the Kit validates the container, when the mistake is one that validation catches. `ModuleWiringTests` and `CompositionCheckTests` in the Kit's repository show each moment.
-- Test an application of one Module through `IDispatcher`, in a scope the test begins with `BeginOperation`, as `SingleModuleTests` does.
+- Test a question to another Module through the asking Module's command: assert what the command did with an answer and with "not found", and that the answering Operation continued the asking one's context.
+- Test a mistake in a Host's composition with a Host of the test's own that makes it: assert the exception and its message at the moment its check runs, while the Host is composed, at `Build()` or at `StartAsync`. Compose it in Production, where only the Kit validates the container, when the mistake is one that validation catches.
+- Test an application of one Module through `IDispatcher`, in a scope the test begins with `BeginOperation`.

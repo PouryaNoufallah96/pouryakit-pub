@@ -1,6 +1,6 @@
 # Observability
 
-`PouryaKit.Observability`: one activity and one duration measurement for every command and query the dispatcher runs, and a trace that continues from an Operation through the Outbox into the deliveries it causes. Namespace `PouryaKit.Observability`. It references `PouryaKit.Cqrs` only and emits through `System.Diagnostics`: the Kit has no OpenTelemetry package, no exporter and no Serilog. Exporting is the Host's job, done with the standard OpenTelemetry setup of the service defaults recipe ([host-recipes.md](host-recipes.md)) that the project templates carry.
+`PouryaKit.Observability`: one activity and one duration measurement for every command and query the dispatcher runs, and a trace that continues from an Operation through the Outbox into the deliveries it causes. Namespace `PouryaKit.Observability`. It references `PouryaKit.Cqrs` only and emits through `System.Diagnostics`: the Kit has no OpenTelemetry package, no exporter and no Serilog.
 
 - [Registering](#registering)
 - [What is emitted](#what-is-emitted)
@@ -50,7 +50,7 @@ The names are constants on `OperationTelemetry`:
 
 ## The trace through delivery
 
-The work an Operation publishes stays in its trace, as a child, never as a link (ADR 0009):
+The work an Operation publishes stays in its trace, as a child, never as a link:
 
 ```text
 request (ASP.NET Core)                  tracestate=vendor=1
@@ -64,9 +64,9 @@ request (ASP.NET Core)                  tracestate=vendor=1
 - Wolverine stores the id of the activity current when the Unit of Work writes the Outbox as the envelope's `parent-id`. The Outbox adds that activity's tracestate as the header `OperationContextHeaders.TraceState` (`pouryakit-tracestate`), which Wolverine does not carry.
 - Each delivery restores both into `Operation.TraceParent` when it begins the Operation. The delivery's activity is a child of Wolverine's span of the envelope when the Host samples the `Wolverine` source, and of the publishing Operation when it does not. Either way it carries the publishing tracestate. Without this step every hop would start a new trace.
 - An occurrence of a recurring command continues no Operation, so its delivery restores no parent: its Operation's activity is a child of Wolverine's span of the envelope when the Host samples the `Wolverine` source, and the root of a trace of its own when it does not ([messaging.md](messaging.md#recurring-commands)).
-- A retry is read back from the message store and stays in the trace, as a sibling of the attempt that failed. A delivery recovered on another Host keeps the parent too, as the evidence of ADR 0009 shows.
+- A retry is read back from the message store and stays in the trace, as a sibling of the attempt that failed. A delivery recovered on another Host keeps the parent too.
 
-Across RabbitMQ, into a subscription of another Host ([rabbitmq.md](rabbitmq.md)), the trace continues the same way (ADR 0009, its amendment on the trace across RabbitMQ):
+Across RabbitMQ, into a subscription of another Host ([rabbitmq.md](rabbitmq.md)), the trace continues the same way:
 
 ```text
 Catalog Host                                     Inventory.Host
@@ -79,7 +79,7 @@ pouryakit.operation Deliver  ── broker ──▶  [Wolverine span of the env
 - Without the `Wolverine` source sampled, the delivery's activity is a child of the publishing Operation in the other Host. With it, there are two Wolverine spans between them: that of the envelope the broker delivered, then that of the copy.
 - Every Host whose Operations belong in the trace calls `AddPouryaKitObservability()`, the receiving Host included: without it, its deliveries have no activity. Each Host exports its own spans; the backend joins them by trace id.
 
-Through the Reverse proxy ([reverse-proxy.md](reverse-proxy.md)), an HTTP request keeps the client's trace id: the Host's request is a child of the proxy's call to it, which is a child of the proxy's request, and the Operation a child of the Host's request. `ReverseProxyTests` proves it with both in the test process.
+Through the Reverse proxy ([reverse-proxy.md](reverse-proxy.md)), an HTTP request keeps the client's trace id: the Host's request is a child of the proxy's call to it, which is a child of the proxy's request, and the Operation a child of the Host's request.
 
 ## Exporting
 
@@ -108,5 +108,5 @@ ActivitySource.AddActivityListener(listener);
 
 - Assert on tags, `Status`, `ParentSpanId` and `TraceStateString`, not on timings. To assert a duration, use a `MeterListener` for the instrument `pouryakit.operation.duration` of the meter `PouryaKit`: a sub-second Operation has a value above zero with a fraction.
 - A test's tracestate reaches a first delivery attempt from the envelope held in memory. Only a retry reads the header back from the store, so test a retry when the header itself is the claim.
-- `ObservabilityTests` in the Proving Sample's tests does all of this for the Catalog-to-Inventory chain. Its `RecordedTelemetry` holds the listeners, and `DeliveryProbes.ActivitiesOf(subscription)` gives the activity each delivery attempt ran in.
-- `CrossProcessTracingTests` does it across RabbitMQ, with the Catalog Host and `Inventory.Host` of `BrokerFixture` both in the test process: a listener sees its own process only. `HostRecipeTests` shows the Kit's activities and durations, and the `Npgsql` spans of a delivery's database commands under its Operation, reaching an exporter the test adds to the service defaults' own providers.
+- The Proving Sample's tests do all of this for the Catalog-to-Inventory chain: `RecordedTelemetry` holds the listeners, and `DeliveryProbes.ActivitiesOf(subscription)` gives the activity each delivery attempt ran in.
+- To record both Hosts' activities with an `ActivityListener`, run both Hosts in the test process: a listener sees its own process only.

@@ -34,7 +34,7 @@ codex plugin add pourya-kit@pouryakit
 
 ## What the skill holds
 
-[`SKILL.md`](skills/pourya-kit/SKILL.md) states the rules that hold in every Capability of the Kit and lists each Capability with the packages that deliver it. Its `references/` folder holds a reference per Capability, which an agent reads before it writes, reviews or tests code that uses it, and the Host recipes guide. The same references are the Reference part of each [Capability page](https://pouryakit.vercel.app/docs/capabilities) on the site.
+[`SKILL.md`](skills/pourya-kit/SKILL.md) states the rules that hold in every Capability of the Kit and lists each Capability with the packages that deliver it. Its `references/` folder holds a reference per Capability, which an agent reads before it writes, reviews or tests code that uses it, and the Host recipes guide.
 
 ## Licence
 

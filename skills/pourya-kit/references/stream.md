@@ -1,6 +1,6 @@
 # Streams
 
-`PouryaKit.Persistence.Marten` and `PouryaKit.Messaging.Wolverine.Marten`: the Kit's second write model, a Stream, an aggregate whose stored state is the events it appended, on Marten 9.53.0 over PostgreSQL. The first package holds the Stream, `IStreams`, the Marten Unit of Work and the Host's Marten store; it references `PouryaKit.Cqrs` and `PouryaKit.Persistence`, and no Wolverine. The second integrates the store with Wolverine's Marten outbox on the Host's one message store, and keeps a Stream Module's Receipts; it references `PouryaKit.Messaging.Wolverine` and the first. Their namespaces are the package names. ADR 0011 records why each write model has one commit owner: a Stream Module's Operations commit through the Marten Unit of Work alone, an EF Module's through the EF one, and no Operation commits through both.
+`PouryaKit.Persistence.Marten` and `PouryaKit.Messaging.Wolverine.Marten`: the Kit's second write model, a Stream, an aggregate whose stored state is the events it appended, on Marten 9.53.0 over PostgreSQL. The first package holds the Stream, `IStreams`, the Marten Unit of Work and the Host's Marten store; it references `PouryaKit.Cqrs` and `PouryaKit.Persistence`, and no Wolverine. The second integrates the store with Wolverine's Marten outbox on the Host's one message store, and keeps a Stream Module's Receipts; it references `PouryaKit.Messaging.Wolverine` and the first. Their namespaces are the package names. Each write model has one commit owner: a Stream Module's Operations commit through the Marten Unit of Work alone, an EF Module's through the EF one, and no Operation commits through both.
 
 - [Registering](#registering)
 - [Writing a Stream](#writing-a-stream)
@@ -11,7 +11,7 @@
 
 ## Registering
 
-The Proving Sample's Ledger (`samples/ModularMonolith/src/Modules/Ledger/`) is a Stream Module beside the EF Core Modules Catalog, Inventory and Billing: it keeps accounts, posts entries to them, reads an account's balance, and publishes `AccountOpenedV1`, which Billing receives. A Stream Module declares its write model in its Composition Root, with its own schema:
+The Proving Sample's Ledger is a Stream Module beside the EF Core Modules Catalog, Inventory and Billing: it keeps accounts, posts entries to them, reads an account's balance, and publishes `AccountOpenedV1`, which Billing receives. A Stream Module declares its write model in its Composition Root, with its own schema:
 
 ```csharp
 public sealed class LedgerModule : IModuleDefinition
@@ -110,7 +110,7 @@ internal sealed class Account : StreamAggregate
 - The Stream type is `internal`; its `Create` and `Apply` methods, and a should-delete method, are `public`. Marten folds a stream through a dispatcher its source generator writes at compile time, which takes public methods only: with an internal `Apply`, loading the Stream throws Marten's invalid-projection exception ("No source-generated dispatcher found") when the Operation runs, not at build.
 - A behaviour applies its event to the Stream, then raises it; the Unit of Work appends what was raised, in order. Each event is a Domain Event, so a Notification Handler subscribes to it as to any other.
 - A Stream's identity is a `Guid`, `StreamAggregate.Id`, which the first event's `Apply` sets; a typed ID wraps it in Feature code, in `IStreams` and in an event, where the Kit's JSON stores its value. Marten takes no class as a stream identity, so a Stream has no typed `Id` of its own.
-- Marten stores an event under its type's name, snake-cased, without its namespace: `account_opened_domain_event` in `events.mt_events.type`. Give each event type of the Host's Stream Modules a name of its own; the sample's `DomainEvent` suffix keeps Ledger's apart from the tests' Stream Module's `AccountOpened`.
+- Marten stores an event under its type's name, snake-cased, without its namespace: `account_opened_domain_event` in `events.mt_events.type`. Give each event type of the Host's Stream Modules a name of its own.
 
 ## Reading and changing Streams
 
@@ -194,11 +194,10 @@ internal sealed class ActivateAccountNotificationHandler(IStreams streams, IInte
 - A Host with a message store gives each write model its Outbox: a Host with an Outbox in which one write model's Unit of Work has none fails when it is built, naming that write model's Modules and the registration to call, since their Operations would commit and never write what they publish. Stream Modules beside the EF message store (`UsePouryaKitWolverine`) and `AddPouryaKitMarten` call for `UsePouryaKitMarten` instead (`The Operations of LedgerModule would commit their Streams' events and never write what they publish: …`); EF Core Modules in a Host whose only message store is `UsePouryaKitMarten` call for `UsePouryaKitWolverine(connectionName)`, before it (`The Operations of BillingModule would commit their changes and never write what they publish or schedule: …`).
 - Realtime pushes, `IUnitOfWorkConnection` and number sequences are the EF Unit of Work's; a Stream Module has none of them.
 - A Stream's projections are folds of one stream; Marten's projection daemon and its documents are not part of the Kit.
-- Wolverine's own aggregate-handler workflow is not used: the Kit's dispatcher runs every Operation (ADR 0011, "Rejected options").
+- Wolverine's own aggregate-handler workflow is not used: the Kit's dispatcher runs every Operation.
 - A Stream Module and a Saga cannot share one Host yet: Marten's integration puts its saga storage before Wolverine's lightweight one, so a Host with `UsePouryaKitMarten` and `AddPouryaKitSaga` is refused when it is built ([sagas.md](sagas.md#limits)).
 
 ## Testing
 
 - A Stream Module's Operations go through its Gateway as any Module's do ([testing.md](testing.md)); a test reads the events from `events.mt_events` and the Module's tables from its schema.
-- The Kit's own proof is `tests/ModularMonolith.Tests/StreamTests.cs`, over the test Module `tests/ModularMonolith.Tests/Streams`: a Host of the Module alone, and the Proving Sample's Host with it beside the EF Core Modules and Ledger.
-- `tests/ModularMonolith.Tests/LedgerTests.cs` proves Ledger in the Proving Sample's Host: its entries append and its projection folds them through the Gateway and over HTTP, a second opening is the Kit's conflict, the command's commit holds the account's opening with the envelope of its Notification and the Notification Handler's commit the activation, its Receipt and the Integration Event's envelope, a delivery to Billing that fails leaves no Receipt and no quote, and an empty account id, a blank holder or an entry of zero answers 400 with its validation Errors. A test reads a commit through a Marten store listener installed on the Host (`StreamCommitProbe` in its fixtures), since an envelope's row changes once it is delivered.
+- A test reads a commit through a Marten store listener installed on the Host, since an envelope's row changes once it is delivered.

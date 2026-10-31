@@ -1,13 +1,15 @@
 ---
 name: pourya-kit
-description: How to build a .NET modular monolith on PouryaKit. Use when writing, reviewing or testing code that references PouryaKit packages, such as a Module, an aggregate, a Stream, a Saga, a command or query, a Domain Event Handler, a Notification Handler and its email or SSE push, an agent and its Gateway tools, a Dapper read, a cached query and the cache tags a command invalidates, a file in S3, MinIO or Azure Blob, a PDF or CSV report, a report job, a message in English and Persian, an Integration Event Handler, a Snapshot mapper, an endpoint, an API version or OpenAPI document, a gRPC service or client, a permission on a command or query, a tenant-scoped Module and its aggregates, a Host that sends or receives Integration Events and Snapshots over RabbitMQ, a Reverse proxy, the service defaults for telemetry, health, HTTP resilience or Serilog, an Aspire AppHost for a Host, a new project from the Kit's dotnet new templates, a test against the hosted application or an architecture test of a Module's boundaries.
+description: How to build a .NET modular monolith on PouryaKit. Use for any code in a solution that references PouryaKit packages, even when the request never names the Kit. It covers writing, reviewing or testing a Module, aggregate, Stream, Saga, command, query, validator or authorizer; a Domain Event Handler, Notification Handler, Integration Event Handler or Snapshot mapper; an endpoint, API version, OpenAPI document or gRPC service; a permission or a tenant-scoped Module; an agent and its Gateway tools; a Dapper read, cached query, file in S3, MinIO or Azure Blob, PDF or CSV report, translated message, email or SSE push; a Host on RabbitMQ, a Reverse proxy, service defaults for telemetry, health, HTTP resilience or Serilog, or an Aspire AppHost; a new project from the Kit's dotnet new templates; a test against the hosted application or an architecture test of a Module's boundaries.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # PouryaKit
 
 PouryaKit lets Feature code hold only business behaviour. The Feature supplies the aggregate, the command or query, its validator and handler, its data access and its endpoint. The Kit dispatches the Operation, validates it, owns its single commit, runs its reactions and delivers its Integration Events and Snapshots to other Modules.
+
+The Proving Sample, named throughout these files, is the sample application whose tests prove the Kit's guarantees. Its source is not published, but the project templates generate its business code ([templates.md](references/templates.md)), so a name from it here is the same name in a generated solution.
 
 These hold in every Capability:
 
@@ -20,8 +22,14 @@ These hold in every Capability:
 - A trusted continuation (`IsTrustedContinuation`) is work an authorized Operation causes, delivered by the Kit or continued with `Continue()` inside that running Operation. It runs on its recorded authority: a declared permission is not checked again for it, while every authorizer the application registered still runs, and so does the tenant requirement of a tenant-scoped Module ([multi-tenancy.md](references/multi-tenancy.md#declaring-a-tenant-scoped-module)). A context application code builds, or continues outside the Operation that ran it, is never trusted, and `CausationId` is informational ([security.md](references/security.md#continuations)).
 - A query, an authorizer, a validator and a Snapshot mapper only read: every write the Kit guards is refused there ([commands-queries-validation.md](references/commands-queries-validation.md#code-that-only-reads)).
 - A Module references no other Module's implementation, makes public only its Composition Root, what its Host implements and its Sagas with their timeouts, and never names a transport type, clears Domain Events or writes an aggregate's table with SQL; in a tenant-scoped Module, every SQL read of a tenant-scoped table holds each such table to the tenant at the top level of its `WHERE`. No application type implements a contract the Kit fills for its pipeline. Structure tests reject each of these, and any save or commit in a Module's code ([testing.md](references/testing.md#structure-tests)).
-- Names follow the Kit's `GLOSSARY.md`: Module, Feature, Operation, Operation Context, Actor, Domain Event, Notification Handler, Integration Event, Snapshot, and for messages the wire name, the subscription and, on a broker, the service name, Wolverine's name for a Host there.
+- Names follow the Kit's [glossary](https://pouryakit.vercel.app/docs/reference/glossary): Module, Feature, Operation, Operation Context, Actor, Domain Event, Notification Handler, Integration Event, Snapshot, and for messages the wire name, the subscription and, on a broker, the service name, Wolverine's name for a Host there.
 - A declaration refuses its own mistakes while the Host is composed. A composition check stops the Host when its container is built, and a startup check when it starts ([modules.md](references/modules.md#the-hosts-checks)).
+
+## Start here
+
+- A new application: [templates.md](references/templates.md), then [Adding a Module](references/modules.md#adding-a-module).
+- A Feature in a Module: [commands-queries-validation.md](references/commands-queries-validation.md), [persistence.md](references/persistence.md), [web.md](references/web.md), then [testing.md](references/testing.md).
+- A reaction in another Module: [messaging.md](references/messaging.md), with [rabbitmq.md](references/rabbitmq.md) once the Modules run in separate Hosts.
 
 ## Capabilities
 
@@ -60,10 +68,8 @@ Read the reference file of each Capability the code touches before writing it.
 
 ## Guides
 
-These three are guides, not Capabilities, because no Kit package delivers them. The Host recipes are template content, the Proving Sample's `ModularMonolith.ServiceDefaults`, which the project templates generate. The other two cover how every package in `scripts/packaging/inventory.json` is validated, consumed and published. Read a guide before the work it names.
+No Kit package delivers these guides. The Host recipes are template content, the Proving Sample's `ModularMonolith.ServiceDefaults`, which the project templates generate. Read a guide before the work it names.
 
 | Guide | Read when | Reference |
 | - | - | - |
 | Host recipes | Composing a Host's service defaults: exporting the Kit's telemetry with OpenTelemetry, liveness and readiness endpoints and why readiness outside Development is the platform's, service discovery, one standard resilience pipeline for every outgoing client and a client that replaces it, logging through Serilog, or testing a Host that uses them | [host-recipes.md](references/host-recipes.md) |
-| Package consumption and validation | Choosing a coherent package version, consuming the verified local feed, changing packability or metadata, or running the shared Release package proof | packages.md |
-| Private publication | Consuming the private feed, publishing a validated main version, using an owner-created prerelease tag or retrying preserved originals | publication.md |

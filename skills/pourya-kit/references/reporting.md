@@ -108,9 +108,9 @@ Rendering is synchronous and in memory, so the whole file is one byte array; ren
 
 - One table per report, of text cells; no charts, images in cells, merged cells or cell styles.
 - One font, Roboto 2.138 regular and bold, with italic simulated: it holds Latin, Greek and Cyrillic glyphs, not Persian or Arabic, and the PDF writer lays out no right-to-left text.
-- PDFsharp is pinned at 6.2.4, its last MIT release: 6.5.0 and later are AGPL-3.0-only, which ADR 0002 does not allow.
-- QuestPDF and ClosedXML are not used (licence), and no second file library: `PackageGraphTests` keeps them out of the package.
+- PDFsharp is pinned at 6.2.4, its last MIT release: 6.5.0 and later are AGPL-3.0-only, and the Kit takes no reciprocally licensed package.
+- QuestPDF and ClosedXML are not used (licence), and no second file library.
 
 ## Testing
 
-`ReportRendererTests` in `tests/PouryaKit.Reporting.Tests` render one layout to each format and read it back with that format's standard reader: the PDF with PDFsharp's `PdfReader` (its header, page count, logo and each page's fonts embedded with their font program), the spreadsheet with the Open XML SDK's `SpreadsheetDocument.Open` and its `OpenXmlValidator` (the cells as rows, escape-like text and control characters read back verbatim), and the CSV with CsvHelper's `CsvReader` (the rows, the escaped formulas, the numbers kept, the byte order mark and a one-column table's empty rows). A Module's own report test renders its layout the same way: build the layout from fixed rows, render it, and read back the cells it promises.
+The Kit's tests render one layout to each format and read it back with that format's standard reader: the PDF with PDFsharp's `PdfReader` (its header, page count, logo and each page's fonts embedded with their font program), the spreadsheet with the Open XML SDK's `SpreadsheetDocument.Open` and its `OpenXmlValidator` (the cells as rows, escape-like text and control characters read back verbatim), and the CSV with CsvHelper's `CsvReader` (the rows, the escaped formulas, the numbers kept, the byte order mark and a one-column table's empty rows). A Module's own report test renders its layout the same way: build the layout from fixed rows, render it, and read back the cells it promises.

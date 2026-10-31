@@ -9,7 +9,7 @@
 - [Documents and Scalar](#documents-and-scalar)
 - [Testing versions and documents](#testing-versions-and-documents)
 
-There is no Swagger, Swashbuckle, NSwag or AsyncAPI: the documents are ASP.NET Core's own OpenAPI, and `PackageGraphTests` fails when a Swagger generator arrives in the package's closure.
+There is no Swagger, Swashbuckle, NSwag or AsyncAPI: the documents are ASP.NET Core's own OpenAPI.
 
 ## Declaring a Module's versions
 
@@ -134,7 +134,7 @@ if (app.Environment.IsDevelopment())
 - Bound from configuration, an entry whose `Date` or `Link` the binder cannot convert (`next June`, `http://`) is left out without an error, so its version reports no sunset: the configuration binder skips a dictionary entry it fails to bind unless the Host's `Configure` call sets `BinderOptions.ErrorOnUnknownConfiguration`.
 - A response of a version with a sunset carries `Sunset: Wed, 30 Jun 2027 00:00:00 GMT` and `Link: <https://example.com/catalog/api-v1-sunset>; rel="sunset"; type="text/html"`.
 - The version's document states it in `info.description` (`This API version is deprecated. Its sunset date is Wed, 30 Jun 2027 00:00:00 GMT.`, then the link) and in `x-api-versioning.links`, and marks each of its operations `deprecated`.
-- Nothing is derived from the current time (ADR 0005): the date is the configured one, never "now + n days", and the notice names it the same way before and after it passes. Asp.Versioning's default notice says "was" or "will be" from the clock; the Kit replaces it.
+- Nothing is derived from the current time: the date is the configured one, never "now + n days", and the notice names it the same way before and after it passes. Asp.Versioning's default notice says "was" or "will be" from the clock; the Kit replaces it.
 
 ## Documents and Scalar
 
@@ -147,5 +147,4 @@ if (app.Environment.IsDevelopment())
 ## Testing versions and documents
 
 - The Proving Sample's fixture clients name `api-version: 2.0` (`AppFixture.ApiVersion`), so tests of other Capabilities call the unversioned paths as a v2 caller. A test of versioning removes that header and names its own version per request.
-- `OpenApiTests` proves selection by URL and by header, the refusals, the configured sunset in responses and documents, each document's operations, the security requirements against what the pipeline answers, the required `Idempotency-Key` header, Scalar's document list, and a Host of `PouryaKit.Web` alone serving an unversioned route group without any versioning service. `MisconfiguredHostTests` proves that each refused sunset stops the Host at start, naming its key, and that the sample's sunset and none at all start.
 - Read a document over HTTP (`/openapi/v2.json`) and assert its JSON; assert a security requirement against the status an anonymous request gets, so the document cannot drift from the pipeline. A requirement follows the Host's schemes, so a test of the bearer requirement composes the Host with its own default scheme (`AddAuthentication(JwtBearerDefaults.AuthenticationScheme)` after the fixture's).
