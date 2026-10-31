@@ -4,7 +4,7 @@
 
 A reusable .NET 10 foundation for modular monoliths, in which Feature code holds only business behaviour. The Feature supplies the aggregate, the command or query, its validator and handler, its data access and its endpoint. The Kit dispatches the Operation, validates it, owns its single commit, runs its reactions and delivers its Integration Events and Snapshots to other Modules.
 
-This repository publishes the Kit's AI skill, which teaches a coding agent to build on the Kit, and the cover images of the Kit and its packages. The documentation is on [the PouryaKit site](https://pouryakit.vercel.app), and the packages are on [nuget.org](https://www.nuget.org/packages?q=PouryaKit).
+This repository publishes the Kit's AI skill, which teaches a coding agent to build on the Kit. The documentation is on [the PouryaKit site](https://pouryakit.vercel.app), and the packages are on [nuget.org](https://www.nuget.org/packages?q=PouryaKit). The packages are MIT-licensed; the Kit's source repository is private, so this repository holds the skill and not the Kit's code.
 
 ## Install the skill
 

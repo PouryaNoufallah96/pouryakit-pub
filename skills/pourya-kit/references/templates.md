@@ -14,7 +14,7 @@
 ## Install and generate
 
 ```bash
-# From nuget.org, at the Kit's version, such as 0.1.0-preview.1. From another NuGet source, add --add-source <folder or feed>.
+# From nuget.org, at the Kit's version. From another NuGet source, add --add-source <folder or feed>.
 dotnet new install PouryaKit.Templates@<version>
 
 dotnet new pouryakit-monolith -n Acme.Shop
