@@ -1,6 +1,6 @@
 # API versions and OpenAPI
 
-`PouryaKit.Web.OpenApi`, optional: the API versions a Module declares, served on its own route group by URL segment and by header, a deprecated version's configured sunset, one OpenAPI document per supported version with each operation's security requirement, and the Scalar API reference over those documents. Namespace `PouryaKit.Web.OpenApi`. It references `PouryaKit.Web`, `Asp.Versioning.Http`, `Asp.Versioning.OpenApi`, `Microsoft.AspNetCore.OpenApi` and `Scalar.AspNetCore`. A Module that declares no version keeps the unversioned paths of [web.md](web.md), and one that declares versions needs the Host to register it ([Declaring a Module's versions](#declaring-a-modules-versions)); `PouryaKit.Web` references none of this stack.
+`PouryaKit.Web.OpenApi`, optional: the API versions a Module declares, served on its own route group by URL segment and by header, a deprecated version's configured sunset, one OpenAPI document per supported version with each operation's security requirement, and the Scalar API reference over those documents. Namespace `PouryaKit.Web.OpenApi`. It references `PouryaKit.Web`, `Asp.Versioning.Http`, `Asp.Versioning.Mvc.ApiExplorer`, `Microsoft.AspNetCore.OpenApi` and `Scalar.AspNetCore`. A Module that declares no version keeps the unversioned paths of [web.md](web.md), and one that declares versions needs the Host to register it ([Declaring a Module's versions](#declaring-a-modules-versions)); `PouryaKit.Web` references none of this stack.
 
 - [Declaring a Module's versions](#declaring-a-modules-versions)
 - [The Host](#the-host)
@@ -9,7 +9,7 @@
 - [Documents and Scalar](#documents-and-scalar)
 - [Testing versions and documents](#testing-versions-and-documents)
 
-There is no Swagger, Swashbuckle, NSwag or AsyncAPI: the documents are ASP.NET Core's own OpenAPI.
+There is no Swagger, Swashbuckle, NSwag or AsyncAPI: the documents are ASP.NET Core's own OpenAPI, version 3.2.
 
 ## Declaring a Module's versions
 
@@ -134,14 +134,17 @@ if (app.Environment.IsDevelopment())
 - Bound from configuration, an entry whose `Date` or `Link` the binder cannot convert (`next June`, `http://`) is left out without an error, so its version reports no sunset: the configuration binder skips a dictionary entry it fails to bind unless the Host's `Configure` call sets `BinderOptions.ErrorOnUnknownConfiguration`.
 - A response of a version with a sunset carries `Sunset: Wed, 30 Jun 2027 00:00:00 GMT` and `Link: <https://example.com/catalog/api-v1-sunset>; rel="sunset"; type="text/html"`.
 - The version's document states it in `info.description` (`This API version is deprecated. Its sunset date is Wed, 30 Jun 2027 00:00:00 GMT.`, then the link) and in `x-api-versioning.links`, and marks each of its operations `deprecated`.
-- Nothing is derived from the current time: the date is the configured one, never "now + n days", and the notice names it the same way before and after it passes. Asp.Versioning's default notice says "was" or "will be" from the clock; the Kit replaces it.
+- A policy the Host states on Asp.Versioning's own options (`services.Configure<ApiVersioningOptions>(versioning => versioning.Policies.Deprecate(new ApiVersion(1, 0)).Link(url).Type("text/html"))`, or `Policies.Sunset`) reaches the document the same way: the deprecation's notice and links come first, then the sunset's. The description lists the links to an HTML page, and `x-api-versioning.links` every link with its title, type, relation, URL, media, languages and extension attributes, as many as the link carries.
+- Nothing is derived from the current time: the date is the configured one, never "now + n days", and the notice names it the same way before and after it passes.
 
 ## Documents and Scalar
 
-- The documents are the versions the Modules declared, as `IApiVersionDescriptionProvider` enumerates them, never a list in the Host. A document holds the operations its version serves, on both paths; the unversioned one lists its `api-version` header parameter. An endpoint of a Module that declares no version appears in every document.
+- The documents are the versions the Modules declared, as `IApiVersionDescriptionProvider` enumerates them, never a list in the Host. A document holds the operations its version serves, on both paths; the unversioned one lists its `api-version` header parameter, which admits the document's version alone (`"enum": ["2.0"]` in v2) and is described as `The requested API version`. An endpoint of a Module that declares no version appears in every document.
+- The Kit's transformers (the notices, the version parameter, the security requirements, the `Idempotency-Key` header) reach the version documents only. A document the Host adds itself with ASP.NET Core's `AddOpenApi("name")` is served beside them at `/openapi/name.json`, with its parameters and security as the Host's own transformers write them. Such a Host references `Microsoft.AspNetCore.OpenApi` itself: that package's source generator, which intercepts `AddOpenApi`, reaches the Host through `PouryaKit.Web.OpenApi`, but the build targets that enable its interceptors come only with a direct reference, and without them the call fails to compile (CS9137).
 - An operation carries a security requirement exactly when the authorization middleware would challenge an anonymous caller: it allows no anonymous caller, and its authorization data or the authenticated default `AddPouryaKitWeb` sets give it a policy. The requirement names the authentication schemes that policy names, or else the Host's default authenticate scheme, one requirement per scheme, since any of them satisfies it. An `AllowAnonymous` or `AllowAnonymousAs(actor)` operation carries no `security`.
 - Only a JWT bearer scheme (its handler is `JwtBearerHandler` or derives from it) is stated, as `components.securitySchemes.<scheme name>` with `type: http`, `scheme: bearer`; the Proving Sample's is `Bearer`. A scheme of any other handler (a cookie, an API key, a test scheme) is left out of the document, so an operation protected only by such a scheme carries no requirement although it refuses anonymous callers. The fixture's Host, whose default scheme is its test scheme, documents none.
 - An operation whose endpoint calls `RequireIdempotencyKey()` ([web.md](web.md#a-repeatable-write)) lists a required header parameter `Idempotency-Key` of type string, whose description states the rule its value follows; no other operation lists it. The Proving Sample's `POST /catalog/products` carries it in every version, on both paths.
+- An endpoint mapped with `MapPouryaKitRealtime` declares its 200 itself, so every document that lists it describes the event stream ([realtime.md](realtime.md#mapping-the-sse-endpoint)).
 - The Scalar page at `/scalar/` lists every version's document by its group name (`v1`, `v2`), each read from `/openapi/{name}.json`.
 
 ## Testing versions and documents

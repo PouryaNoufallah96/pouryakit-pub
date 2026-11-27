@@ -11,19 +11,17 @@
 
 ## The AppHost
 
-An AppHost project uses the `Aspire.AppHost.Sdk` and references the Hosts and the Reverse proxy it runs, and the package. This is the Proving Sample's AppHost project:
+An AppHost project is a console project on `Microsoft.NET.Sdk` with Aspire's `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` packages and the Kit's. It runs each Host and the Reverse proxy by its project path, so it references none of them. This is the Proving Sample's AppHost project:
 
 ```xml
-<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>pouryakit-modular-monolith-apphost</UserSecretsId>
-    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Inventory.Host\Inventory.Host.csproj" />
-    <ProjectReference Include="..\ModularMonolith.Host\ModularMonolith.Host.csproj" />
-    <ProjectReference Include="..\ModularMonolith.ReverseProxy\ModularMonolith.ReverseProxy.csproj" />
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.Dotnet" />
     <PackageReference Include="PouryaKit.Aspire" />
   </ItemGroup>
 </Project>
@@ -31,7 +29,9 @@ An AppHost project uses the `Aspire.AppHost.Sdk` and references the Hosts and th
 
 Its `Properties/launchSettings.json` has one profile that sets `DOTNET_ENVIRONMENT` to `Development` and opens no browser. The environment matters: the AppHost reads its user secrets only in Development, and without them it generates new server passwords on every run, which the volumes the first run made then refuse.
 
-The SDK adds `Aspire.Hosting.AppHost` itself: with central package management, give it no `PackageVersion`, or restore fails with NU1009. `ASPIRE010` warns that the AppHost runs without the Aspire CLI bundle; it takes its orchestrator from NuGet instead, so Docker is all it needs.
+With central package management, both Aspire packages take a `PackageVersion`. Aspire 17 made `Aspire.AppHost.Sdk` obsolete (`ASPIRE012`), and the generic AddProject call that took a project's generated type too (`CS0618`, an error under warnings as errors): `AddDotnetProject` takes the project's path instead.
+
+- **The Aspire CLI bundle.** A C# AppHost takes its orchestrator (DCP) and its dashboard from the Aspire CLI bundle, and cannot turn it off (`ASPIRE013`). The build takes the bundle of the `aspire` command on `PATH`, whatever its version, so keep an installed CLI at the AppHost's version (`aspire update --self`). With no `aspire` on `PATH`, as on a fresh machine or a CI runner, the build runs the `Aspire.Cli` paired with `Aspire.Hosting.AppHost` through the SDK's `dnx`, which downloads it from NuGet and extracts its bundle under `~/.aspire` (or `ASPIRE_HOME`): that first build needs network access, and later builds reuse the bundle.
 
 Its `Program.cs` adds a resource for each part of each Host's composition and gives it to the Host under the connection name the Host reads:
 
@@ -47,7 +47,7 @@ var shop = postgres.AddDatabase("modular-monolith-db", "modular_monolith");
 var inventory = postgres.AddDatabase("inventory-db", "inventory");
 
 var inventoryHost = builder
-    .AddProject<Projects.Inventory_Host>("inventory")
+    .AddDotnetProject("inventory", "../Inventory.Host/Inventory.Host.csproj")
     .WithHttpEndpoint()
     .WithHttpHealthCheck("/alive")
     .WithReference(inventory, "app")
@@ -57,7 +57,7 @@ var inventoryHost = builder
     .WaitFor(broker);
 
 var shopHost = builder
-    .AddProject<Projects.ModularMonolith_Host>("modular-monolith")
+    .AddDotnetProject("modular-monolith", "../ModularMonolith.Host/ModularMonolith.Host.csproj")
     .WithHttpEndpoint()
     .WithHttpEndpoint(name: "grpc")
     .WithEndpointsInEnvironment(_ => false)
@@ -71,7 +71,7 @@ var shopHost = builder
 // ...its Kestrel endpoints, below...
 
 builder
-    .AddProject<Projects.ModularMonolith_ReverseProxy>("reverse-proxy")
+    .AddDotnetProject("reverse-proxy", "../ModularMonolith.ReverseProxy/ModularMonolith.ReverseProxy.csproj")
     .WithHttpHealthCheck("/alive")
     .WithReference(inventoryHost)
     .WithReference(shopHost)
@@ -83,6 +83,7 @@ builder.Build().Run();
 ```
 
 - **Headless.** `AppHostOptions.Create(args)` (`AppHostOptions.cs` beside `Program.cs`) returns `DistributedApplicationOptions` with `DisableDashboard = true`: no dashboard, under `dotnet run` or in the tests. A developer who wants Aspire's dashboard locally sets it to `false` in their copy; the AppHost then logs the dashboard's login URL.
+- **Each project by its path.** `AddDotnetProject(name, path)` takes the project file's path from the AppHost's directory. Building the AppHost builds no Host: Aspire builds the projects when it starts them, behind a hidden resource each one waits for, `__dotnet-project-build`, and runs each with `dotnet run`.
 - **The composition decides, through its connection strings.** An AppHost cannot see a Host's registrations, so the AppHost's author adds Redis only for a Host whose composition registers a Redis cache, and RabbitMQ only for one that calls `UsePouryaKitRabbitMq`. `WithReference(resource, "app")` sets `ConnectionStrings:app`, the name `UsePouryaKitWolverine(connectionName: "app")` reads; `WithReference(cache)` sets `ConnectionStrings:cache` and `WithReference(broker)` `ConnectionStrings:broker`, the names the sample's composition reads. The sample's `ModularMonolith.Host` caches in Redis and sends over RabbitMQ when those are set, so with a broker Inventory runs in `Inventory.Host`, which receives over RabbitMQ and caches nothing.
 - **Each Host its own database** on the one server: `AddDatabase(name, databaseName)` creates it when the server is ready.
 - **Endpoints.** A Host project without `Properties/launchSettings.json` has none: `WithHttpEndpoint()` gives it one on a free port. `WithHttpHealthCheck("/alive")` waits on a Host that maps the service defaults' liveness path ([host-recipes.md](host-recipes.md#liveness-and-readiness)); the sample's `ModularMonolith.Host` maps none.
@@ -137,7 +138,7 @@ The Reverse proxy ([reverse-proxy.md](reverse-proxy.md)) runs in front of both H
 A Host whose agent calls a model ([ai.md](ai.md)) can run it locally on Ollama. The Proving Sample's AppHost adds it only when it runs with `LocalAgent=true`, an argument or the environment variable `LocalAgent`, since the image and the model are large and the Host starts without them:
 
 ```csharp
-var shopHost = builder.AddProject<Projects.ModularMonolith_Host>("modular-monolith") /* ...as above... */;
+var shopHost = builder.AddDotnetProject("modular-monolith", "../ModularMonolith.Host/ModularMonolith.Host.csproj") /* ...as above... */;
 
 if (bool.TryParse(builder.Configuration["LocalAgent"], out var localAgent) && localAgent)
 {
@@ -159,10 +160,10 @@ if (bool.TryParse(builder.Configuration["LocalAgent"], out var localAgent) && lo
 
 | Call | Resource | Image | Volume target |
 | - | - | - | - |
-| `AddPouryaKitPostgres(name)` | `PostgresServerResource` | `docker.io/library/postgres:18.6` | `/var/lib/postgresql` |
-| `AddPouryaKitRedis(name)` | `RedisResource` | `docker.io/library/redis:8.10.1` | `/data` |
-| `AddPouryaKitRabbitMq(name)` | `RabbitMQServerResource` | `docker.io/library/rabbitmq:4.3.6`, no management plugin | `/var/lib/rabbitmq` |
-| `AddPouryaKitOllama(name, model)` | `ContainerResource`, healthy once it serves `model` | `docker.io/ollama/ollama:0.40.6` | `/root/.ollama` |
+| `AddPouryaKitPostgres(name)` | `PostgresServerResource` | `docker.io/library/postgres:18.7` | `/var/lib/postgresql` |
+| `AddPouryaKitRedis(name)` | `RedisResource` | `docker.io/library/redis:8.10.3` | `/data` |
+| `AddPouryaKitRabbitMq(name)` | `RabbitMQServerResource` | `docker.io/library/rabbitmq:4.4.0`, no management plugin | `/var/lib/rabbitmq` |
+| `AddPouryaKitOllama(name, model)` | `ContainerResource`, healthy once it serves `model` | `docker.io/ollama/ollama:0.40.16` | `/root/.ollama` |
 
 - Each call but Ollama's is Aspire's own `AddPostgres`, `AddRedis` or `AddRabbitMQ` with the image pinned (`WithImage`) and `WithDataVolume()`, so it returns Aspire's resource builder and anything Aspire offers on it still applies; Ollama's is `AddContainer` with a volume Aspire names the same way.
 - The tags are the ones the Kit's tests run. Aspire's own defaults float on a minor version (`18.3`, `8.6`, `4.3`).
@@ -171,7 +172,7 @@ if (bool.TryParse(builder.Configuration["LocalAgent"], out var localAgent) && lo
 
 ## Running it
 
-`dotnet run` on the AppHost project starts the containers, both Hosts and the Reverse proxy, headless; the proxy answers on `http://localhost:5100`. It needs Docker and the .NET SDK, no Aspire workload or CLI, and the `bearer-signing-key` parameter set first, in the AppHost's user secrets or as the environment variable `Parameters__bearer-signing-key`. Add `LocalAgent=true` after `--` for Ollama and the agent's model.
+`dotnet run` on the AppHost project hands it to the Aspire CLI's `aspire run`, the CLI the build chose ([The Aspire CLI bundle](#the-apphost)), which starts the containers, both Hosts and the Reverse proxy, headless; the proxy answers on `http://localhost:5100`. It needs Docker, the .NET SDK and that CLI, and the `bearer-signing-key` parameter set first, in the AppHost's user secrets or as the environment variable `Parameters__bearer-signing-key`. Add `LocalAgent=true` after `--` for Ollama and the agent's model. The CLI keeps its settings in `aspire.config.json` beside the project, which the sample commits.
 
 A named volume keeps the credentials it was first initialised with. Aspire generates each server's password as a parameter (`postgres-password`, `cache-password`, `broker-password`) and keeps it in the AppHost's user secrets, which is why the AppHost has a `UserSecretsId` and runs in Development, where it reads them back. Set a password yourself, and the volume made with another one refuses it: remove the volume (`docker volume rm`) or keep the first password.
 
